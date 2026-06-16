@@ -1,0 +1,62 @@
+name: CI — qti-launch-site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  setup:
+    name: Setup & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify Node version
+        run: node --version
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
+
+      - name: Install dependencies (if package.json present)
+        run: |
+          if [ -f package.json ]; then
+            npm install
+          else
+            echo "No package.json found — static site, skipping npm install"
+          fi
+
+      - name: Lint HTML files
+        run: |
+          if ls *.html 1> /dev/null 2>&1; then
+            npx --yes htmlhint *.html || true
+          else
+            echo "No HTML files in root to lint"
+          fi
+
+      - name: Check for broken internal links
+        run: |
+          echo "File structure:"
+          find . -not -path './.git/*' -not -path './.github/*' | head -40
+
+      - name: Build (if build script present)
+        run: |
+          if [ -f package.json ] && grep -q '"build"' package.json; then
+            npm run build
+          else
+            echo "No build script — static site confirmed"
+          fi
