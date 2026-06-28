@@ -8,22 +8,80 @@ on:
 
 jobs:
   build:
-    name: Build
+    name: Build & Type Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Setup Node.js 24
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci || true
+        run: npm ci
 
-      - name: Build
-        run: npm run build || true
+      - name: Type check
+        run: npx tsc --noEmit
         env:
           SKIP_ENV_VALIDATION: true
+
+      - name: Build
+        run: npm run build
+        env:
+          SKIP_ENV_VALIDATION: true
+
+  secret-audit:
+    name: Secret & Env Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan for accidental secret commits (TruffleHog)
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: Verify no NEXT_PUBLIC_ RPC keys in bundle source
+        run: |
+          echo "Scanning for exposed private RPC patterns..."
+          if grep -rn "NEXT_PUBLIC_.*RPC\|NEXT_PUBLIC_.*SECRET\|NEXT_PUBLIC_.*PRIVATE" src/; then
+            echo "ERROR: Private or RPC keys found in NEXT_PUBLIC_ variables — these will be exposed in the browser bundle."
+            exit 1
+          fi
+          echo "Clean — no private keys in public namespace."
+
+      - name: Verify .env files are not committed
+        run: |
+          if git ls-files | grep -E '^\.env$|^\.env\.local$|^\.env\.production$'; then
+            echo "ERROR: .env file committed to repository."
+            exit 1
+          fi
+          echo "Clean — no .env files in git tree."
+
+  dependency-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (high + critical only)
+        run: npm audit --audit-level=high
