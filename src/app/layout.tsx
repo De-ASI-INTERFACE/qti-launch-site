@@ -10,6 +10,7 @@ import "./globals.css";
 import { WalletContextProvider } from "@/providers/WalletContextProvider";
 import { ToastProvider }         from "@/providers/ToastProvider";
 import { SpeedInsights }         from "@vercel/speed-insights/next";
+import { Analytics }             from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
   title:       "QTI — Quantum Trading Infinity",
@@ -37,6 +38,7 @@ export default function RootLayout({
           </ToastProvider>
         </WalletContextProvider>
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
